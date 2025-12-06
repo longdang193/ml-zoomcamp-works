@@ -8,12 +8,10 @@ def predict_single(customer):
     return float(result)
 
 def lambda_handler(event, context):
-    # print("Parameters:", event)
-
     customer = event['customer']
-    prob = predict_single(customer)
+    prediction = predict_single(customer)
 
     return {
-        "churn_probability": prob,
-        "churn": bool(prob >= 0.5)
+        'churn_probability': prediction,
+        'churn': prediction >= 0.5
     }
