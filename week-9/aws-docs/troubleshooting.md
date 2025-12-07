@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Quick reference for resolving common AWS credential issues when using boto3 in Jupyter notebooks.
+Quick reference for resolving common AWS credential and permission issues
+when using boto3 in Jupyter notebooks.
 
 ## Target Audience
 
-Developers using AWS CLI with `aws login` or `aws configure` and boto3 in Jupyter notebooks.
+Developers using AWS CLI with `aws login` or `aws configure` and boto3 in
+Jupyter notebooks.
 
 ---
 
@@ -14,15 +16,18 @@ Developers using AWS CLI with `aws login` or `aws configure` and boto3 in Jupyte
 
 ### Symptoms
 
-```
+```text
 NoCredentialsError: Unable to locate credentials
 ```
 
-Occurs when invoking AWS services via boto3 in a notebook, even after successfully running `aws login` in the terminal.
+Occurs when invoking AWS services via boto3 in a notebook, even after
+successfully running `aws login` in the terminal.
 
 ### Root Cause
 
-Jupyter notebook kernels run in separate Python processes that don't automatically access credentials cached by `aws login`. Credentials are stored in `~/.aws/login/cache/` but boto3 doesn't read this location by default.
+Jupyter notebook kernels run in separate Python processes that don't
+automatically access credentials cached by `aws login`. Credentials are stored
+in `~/.aws/login/cache/` but boto3 doesn't read this location by default.
 
 ### Solution
 
@@ -157,18 +162,21 @@ Then restart the notebook kernel.
 
 #### Option 2: AWS Configure
 
-Use `aws configure` for persistent credentials that work automatically with boto3.
+Use `aws configure` for persistent credentials that work automatically with
+boto3.
 
-**Step 1: Get AWS Access Keys**
+##### Get AWS Access Keys
 
 1. Go to [AWS Console](https://console.aws.amazon.com/)
-2. Navigate to: **IAM** → **Users** → **Your Username** → **Security Credentials**
+2. Navigate to: **IAM** → **Users** → **Your Username** → **Security
+   Credentials**
 3. Click **Create Access Key**
 4. Select **Command Line Interface (CLI)**
 5. Download or copy the **Access Key ID** and **Secret Access Key**
-6. ⚠️ **Important**: Save these securely - you won't be able to see the secret key again
+6. ⚠️ **Important**: Save these securely - you won't be able to see the secret
+   key again
 
-**Step 2: Configure AWS CLI**
+##### Configure AWS CLI
 
 Run the interactive configuration:
 
@@ -178,23 +186,24 @@ aws configure
 
 Enter the following when prompted:
 
-```
+```text
 AWS Access Key ID [None]: YOUR_ACCESS_KEY_ID
 AWS Secret Access Key [None]: YOUR_SECRET_ACCESS_KEY
 Default region name [None]: us-west-2
 Default output format [None]: json
 ```
 
-**Step 3: Verify Configuration**
+##### Verify Configuration
 
 ```bash
 aws sts get-caller-identity
 aws configure list
 ```
 
-**Step 4: Use in Notebook**
+##### Use in Notebook
 
-With `aws configure`, boto3 automatically reads credentials from `~/.aws/credentials`. No special code needed:
+With `aws configure`, boto3 automatically reads credentials from
+`~/.aws/credentials`. No special code needed:
 
 ```python
 import boto3
@@ -222,12 +231,14 @@ def invoke_lambda_function(function_name, payload, region_name='us-west-2'):
 ```
 
 **Advantages:**
+
 - No credential loading code needed
 - Works immediately with standard boto3
 - No kernel restart required
 - Credentials persist across sessions
 
 **Security Notes:**
+
 - Access keys are permanent until rotated
 - Never commit credentials to version control
 - Rotate keys regularly
@@ -235,7 +246,145 @@ def invoke_lambda_function(function_name, payload, region_name='us-west-2'):
 
 ---
 
+## Problem: AccessDeniedException - IAM Permission Errors
+
+### IAM Permission Error Symptoms
+
+```text
+An error occurred (AccessDeniedException) when calling the
+CreateRepository operation: 
+User: arn:aws:iam::ACCOUNT_ID:user/USERNAME is not authorized to perform: 
+ecr:CreateRepository on resource:
+arn:aws:ecr:REGION:ACCOUNT_ID:repository/REPO_NAME 
+because no identity-based policy allows the ecr:CreateRepository action
+```
+
+Occurs when attempting AWS operations (e.g., creating ECR repositories, Lambda
+functions) via CLI or boto3.
+
+### IAM Permission Error Root Cause
+
+Your IAM user lacks the necessary permissions to perform the requested AWS
+operation. IAM permissions must be granted by an AWS administrator.
+
+### IAM Permission Error Solution
+
+**You cannot request permissions via CLI.** Permissions must be granted by
+an AWS administrator.
+
+#### Step 1: Identify Required Permissions
+
+Determine which permissions you need based on the error message. For example:
+
+- `ecr:CreateRepository` - Create ECR repositories
+- `ecr:DescribeRepositories` - List repositories
+- `ecr:GetAuthorizationToken` - Authenticate Docker pushes
+- `ecr:PutImage` - Push Docker images
+
+#### Step 2: Request Permissions from Administrator
+
+Contact your AWS administrator and request one of the following:
+
+##### Option A: Managed Policy (Recommended)
+
+- Request attachment of the managed AWS policy
+  `AmazonEC2ContainerRegistryFullAccess` to your IAM user
+
+##### Option B: Custom Policy
+
+- Provide your administrator with a custom policy document:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecr:CreateRepository",
+                "ecr:DescribeRepositories",
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:PutImage",
+                "ecr:InitiateLayerUpload",
+                "ecr:UploadLayerPart",
+                "ecr:CompleteLayerUpload"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+#### Step 3: Alternative - Use AWS Console
+
+If you have console access but not CLI permissions:
+
+1. Go to [AWS Console](https://console.aws.amazon.com/)
+2. Navigate to the service (e.g., ECR, Lambda)
+3. Create resources through the web interface
+4. Use the created resources in your code
+
+##### Creating ECR Repository via Console
+
+1. Go to [ECR Console](https://console.aws.amazon.com/ecr/)
+2. Select your region
+3. Click **Create repository**
+4. Enter repository name
+5. Click **Create repository**
+6. Copy the repository URI for use in your code
+
+### IAM Permission Verification
+
+After permissions are granted:
+
+```bash
+# Test the operation that previously failed
+aws ecr create-repository --repository-name test-repo --region us-east-1
+
+# Verify your identity
+aws sts get-caller-identity
+```
+
+### IAM Permission Edge Cases
+
+**Partial Permissions:**
+
+- You may have some ECR permissions but not others
+- Check which specific action failed in the error message
+- Request only the missing permissions
+
+**Region-Specific Permissions:**
+
+- Some policies may be region-specific
+- Ensure permissions are granted for your target region
+
+**Temporary Credentials:**
+
+- If using `aws login`, ensure your session has sufficient permissions
+- Re-authenticate if credentials expired
+
+### What You Cannot Do
+
+- ❌ Request permissions via CLI
+- ❌ Grant yourself permissions
+- ❌ Modify IAM policies without `iam:*` permissions
+
+### What You Can Do
+
+- ✅ Check your current permissions (if you have
+  `iam:ListAttachedUserPolicies`)
+- ✅ Use AWS Console if you have console access
+- ✅ Contact your AWS administrator
+- ✅ Use existing resources created by others
+
+---
+
 ## Related Documentation
 
 - [AWS Setup Guide](../AWS_SETUP.md) - Initial AWS CLI configuration
 - [AWS CLI v2 Login Documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)
+- [AWS IAM User Guide](https://docs.aws.amazon.com/IAM/latest/UserGuide/) -
+  Understanding IAM permissions
