@@ -6,9 +6,8 @@ WORKDIR /app
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-COPY pyproject.toml uv.lock .python-version ./
-
-RUN uv sync --locked
+COPY pyproject.toml README.md .python-version ./
+RUN uv sync
 
 COPY app.py clothing-model.onnx ./
 
