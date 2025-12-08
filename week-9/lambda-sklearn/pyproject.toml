@@ -1,9 +1,0 @@
-[project]
-name = "churn-prediction-lambda"
-version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.13"
-dependencies = [
-    "pandas>=2.3.3",
-    "scikit-learn>=1.7.2",
-]
